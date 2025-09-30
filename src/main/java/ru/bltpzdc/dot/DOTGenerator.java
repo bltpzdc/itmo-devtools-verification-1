@@ -33,8 +33,8 @@ public class DOTGenerator {
             for ( var node : nodes.values() ) {
                 if ( node.getType() != CFGNodeType.LABEL ) {
                     for ( var successor : node.getSuccessors() ) {
-                        dot.append(String.format("    \"%s\" -> \"%s\" [label=\"%s\"]\n",
-                            node.getId(), processCFGNodeId(successor.b), successor.a));
+                        dot.append(String.format("    \"%s\" -> \"%s\" [label=\"%s\", color=%s]\n",
+                            node.getId(), processCFGNodeId(successor.b), successor.a, getEdgeColor(successor.a)));
                     }
                 }
             }
@@ -61,4 +61,15 @@ public class DOTGenerator {
         CFGNodeType.COND, "diamond",
         CFGNodeType.STMT, "rectangle"
     );
+
+    private static final Map<String, String> edgeColors = Map.of(
+        "True", "green",
+        "False", "red"
+    );
+
+    private static String getEdgeColor(String label) {
+        return edgeColors.containsKey(label)
+             ? edgeColors.get(label)
+             : "black";
+    }
 }

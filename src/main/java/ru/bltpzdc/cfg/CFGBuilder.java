@@ -13,7 +13,6 @@ public class CFGBuilder {
     // TODO: make build()
     public Pair<Map<String, CFGNode>, CFGNode> buildCFG(MethodDeclaration method) {
         visitor = new CFGVisitor();
-        System.out.println(method.getName());
 
         var entryNode = visitor.createNode(method.getDeclarationAsString(), CFGNodeType.ENTRY);
         var exitNode = visitor.createNode("EXIT", CFGNodeType.EXIT);
