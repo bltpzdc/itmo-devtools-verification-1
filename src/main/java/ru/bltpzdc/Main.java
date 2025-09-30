@@ -13,6 +13,7 @@ import com.github.javaparser.utils.Pair;
 
 import ru.bltpzdc.cfg.CFGBuilder;
 import ru.bltpzdc.cfg.CFGNode;
+import ru.bltpzdc.dot.DOTGenerator;
 
 public class Main {
     public static void main(String[] args) {
@@ -32,9 +33,11 @@ public class Main {
         List<Pair<SimpleName, CFGNode>> methods = new ArrayList<>();
         CFGBuilder cfgBuilder = new CFGBuilder();
         for ( var method : unit.findAll(MethodDeclaration.class) ) {
-            methods.add(new Pair<>(method.getName(), cfgBuilder.buildCFG(method)));
+            var result = cfgBuilder.buildCFG(method);
+            methods.add(new Pair<>(method.getName(), result.b));
+            System.out.println(methods);
+            System.out.println(result.a);
+            System.out.println(DOTGenerator.convert(method.getName().toString(), result.a).get());
         }
-
-        System.out.println(methods);
     }
 }

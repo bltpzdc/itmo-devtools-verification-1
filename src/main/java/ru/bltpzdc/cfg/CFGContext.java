@@ -8,12 +8,14 @@ public class CFGContext {
     private final CFGNode followingNode;
     private final Map<String, CFGNode> labels;
     private final Optional<CFGNode> afterBreakNode;
+    private final CFGNode exitNode;
 
-    public CFGContext(CFGNode followingNode, Map<String, CFGNode> labels, Optional<CFGNode> afterBreakNode) {
+    public CFGContext(CFGNode followingNode, Map<String, CFGNode> labels, Optional<CFGNode> afterBreakNode, CFGNode exitNode) {
         this.currentNode = followingNode;
         this.followingNode = followingNode;
         this.labels = labels;
         this.afterBreakNode = afterBreakNode;
+        this.exitNode = exitNode;
     }
 
     public Map<String, CFGNode> getLabels() {
@@ -34,5 +36,9 @@ public class CFGContext {
 
     public Optional<CFGNode> getAfterBreakNode() {
         return afterBreakNode;
+    }
+
+    public CFGNode getExitNode() {
+        return exitNode;
     }
 }

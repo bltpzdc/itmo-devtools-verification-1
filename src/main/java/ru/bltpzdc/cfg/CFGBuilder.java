@@ -1,23 +1,26 @@
 package ru.bltpzdc.cfg;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.utils.Pair;
 
 public class CFGBuilder {
-    CFGVisitor visitor;
+    private CFGVisitor visitor;
 
-    public CFGNode buildCFG(MethodDeclaration method) {
+    // TODO: make build()
+    public Pair<Map<String, CFGNode>, CFGNode> buildCFG(MethodDeclaration method) {
         visitor = new CFGVisitor();
         System.out.println(method.getName());
 
-        var entryNode = visitor.createNode("ENTRY", NodeType.ENTRY);
-        var exitNode = visitor.createNode("EXIT", NodeType.EXIT);
+        var entryNode = visitor.createNode(method.getDeclarationAsString(), CFGNodeType.ENTRY);
+        var exitNode = visitor.createNode("EXIT", CFGNodeType.EXIT);
 
         if ( method.getBody().isPresent() ) {
             var body = method.getBody().get();
-            var ctx = new CFGContext(exitNode, new HashMap<>(), Optional.empty());
+            var ctx = new CFGContext(exitNode, new HashMap<>(), Optional.empty(), exitNode);
 
             body.accept(visitor, ctx);
 
@@ -26,7 +29,7 @@ public class CFGBuilder {
             entryNode.addSuccessor(exitNode);
         }
 
-        return entryNode;
+        return new Pair<>(visitor.getNodes(), entryNode);
     }
 
 
