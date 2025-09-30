@@ -20,16 +20,22 @@ public class DOTGenerator {
                     """);
 
             for ( var node : nodes.values() ) {
-                var shape = nodeShapes.get(node.getType());
-                dot.append(String.format("    \"%s\" [label=\"%s\", shape=%s];\n",
-                    node.getId(), node.getLabel(), shape));
+                var type = node.getType();
+                if ( type != CFGNodeType.LABEL ) {
+                    var shape = nodeShapes.get(node.getType());
+                    dot.append(String.format("    \"%s\" [label=\"%s\", shape=%s];\n",
+                        node.getId(), node.getLabel(), shape));
+                }
             }
 
             dot.append("\n");
 
             for ( var node : nodes.values() ) {
-                for ( var successor : node.getSuccessors() ) {
-                    dot.append(String.format("    \"%s\" -> \"%s\" [label=\"%s\"]\n", node.getId(), successor.b.getId(), successor.a));
+                if ( node.getType() != CFGNodeType.LABEL ) {
+                    for ( var successor : node.getSuccessors() ) {
+                        dot.append(String.format("    \"%s\" -> \"%s\" [label=\"%s\"]\n",
+                            node.getId(), processCFGNodeId(successor.b), successor.a));
+                    }
                 }
             }
 
@@ -40,6 +46,13 @@ public class DOTGenerator {
         }
 
         return result;
+    }
+
+    // if CFGNodeType is LABEL, we need to ignore this node
+    private static String processCFGNodeId(CFGNode node) {
+        return node.getType() == CFGNodeType.LABEL
+             ? node.getSuccessors().get(0).b.getId()
+             : node.getId();
     }
 
     private static final Map<CFGNodeType, String> nodeShapes = Map.of(
