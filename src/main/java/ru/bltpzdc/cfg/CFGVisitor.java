@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.BreakStmt;
+import com.github.javaparser.ast.stmt.ContinueStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ForStmt;
@@ -23,6 +24,10 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
 
     public CFGVisitor() {
         this.nodes = new HashMap<>();
+    }
+
+    public void reset() {
+        nodes.clear();
     }
 
     public Map<String, CFGNode> getNodes() {
@@ -44,7 +49,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var label = labeledStmt.getLabel().toString();
         var labelNode = createNode(label, CFGNodeType.LABEL);
 
-        var labeledCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode());
+        var labeledCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
         labeledCtx.getLabels().put(label, labelNode);
 
         labeledStmt.getStatement().accept(this, labeledCtx);
@@ -73,7 +78,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var stmts = blockStmt.getStatements();
 
         for ( int i = stmts.size() - 1; i >= 0; --i ) {
-            var stmtCtx = new CFGContext(currentNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode());
+            var stmtCtx = new CFGContext(currentNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
             stmts.get(i).accept(this, stmtCtx);
             currentNode = stmtCtx.getCurrentNode();
         }
@@ -84,7 +89,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
     @Override
     public void visit(ExpressionStmt exprStmt, CFGContext ctx) {
         var expr = exprStmt.toString();
-        var stmtNode = createNode(expr, CFGNodeType.STMT);
+        var stmtNode = createNode(expr, CFGNodeType.EXPR);
         stmtNode.addSuccessor(ctx.getFollowingNode());
         ctx.setCurrentNode(stmtNode);
     }
@@ -94,12 +99,12 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var followingNode = ctx.getFollowingNode();
         var condNode = createNode(ifStmt.getCondition().toString(), CFGNodeType.COND);
 
-        var thenCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode());
+        var thenCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
         ifStmt.getThenStmt().accept(this, thenCtx);
 
         var elseNode = followingNode;
         if ( ifStmt.hasElseBranch() ) {
-            var elseCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode());
+            var elseCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
             ifStmt.getElseStmt().get().accept(this, elseCtx);
             elseNode = elseCtx.getCurrentNode();
         }
@@ -115,7 +120,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var followingNode = ctx.getFollowingNode();
         var condNode = createNode(whileStmt.getCondition().toString(), CFGNodeType.COND);
 
-        var bodyCtx = new CFGContext(condNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode());
+        var bodyCtx = new CFGContext(condNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), Optional.of(condNode));
         whileStmt.getBody().accept(this, bodyCtx);
 
         condNode.addSuccessor(bodyCtx.getCurrentNode(), "True");
@@ -129,7 +134,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var followingNode = ctx.getFollowingNode();
         var condNode = createNode(doStmt.getCondition().toString(), CFGNodeType.COND);
 
-        var bodyCtx = new CFGContext(condNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode());
+        var bodyCtx = new CFGContext(condNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), Optional.of(condNode));
         doStmt.getBody().accept(this, bodyCtx);
 
         condNode.addSuccessor(bodyCtx.getCurrentNode(), "True");
@@ -148,18 +153,18 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var initNode = condNode;
         var init = forStmt.getInitialization().toString();
         if ( !init.equals("[]") ) {
-            initNode = createNode(init, CFGNodeType.STMT);
+            initNode = createNode(init, CFGNodeType.EXPR);
             initNode.addSuccessor(condNode);
         }
 
         var update = forStmt.getUpdate().toString();
         var updateNode = condNode;
         if ( !update.equals("[]") ) {
-            updateNode = createNode(update, CFGNodeType.STMT);
+            updateNode = createNode(update, CFGNodeType.EXPR);
             updateNode.addSuccessor(condNode);
         }
 
-        var bodyCtx = new CFGContext(updateNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode());
+        var bodyCtx = new CFGContext(updateNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), Optional.of(condNode));
         forStmt.getBody().accept(this, bodyCtx);
 
         condNode.addSuccessor(bodyCtx.getCurrentNode(), "True");
@@ -178,7 +183,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var swicthEntries = switchStmt.getEntries();
         var currentNode = followingNode;
         for ( var i = swicthEntries.size() - 1; i >= 0; --i ) {
-            var entryCtx = new CFGContext(currentNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode());
+            var entryCtx = new CFGContext(currentNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), ctx.getCondNode());
             var entry = swicthEntries.get(i);
             entry.accept(this, entryCtx);
             currentNode = entryCtx.getCurrentNode();
@@ -194,7 +199,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var stmts = switchEntry.getStatements();
 
         for ( int i = stmts.size() - 1; i >= 0; --i ) {
-            var stmtCtx = new CFGContext(currentNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode());
+            var stmtCtx = new CFGContext(currentNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
             stmts.get(i).accept(this, stmtCtx);
             currentNode = stmtCtx.getCurrentNode();
         }
@@ -204,7 +209,7 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
 
     @Override
     public void visit(ReturnStmt returnStmt, CFGContext ctx) {
-        var returnNode = createNode(returnStmt.toString(), CFGNodeType.STMT);
+        var returnNode = createNode(returnStmt.toString(), CFGNodeType.EXPR);
         returnNode.addSuccessor(ctx.getExitNode());
         ctx.setCurrentNode(returnNode);
     }
@@ -212,5 +217,22 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
     private String getSwitchEntryName(SwitchEntry entry) {
         var entryName = entry.getLabels().toString();
         return entryName.length() == 2 ? "default" : entryName.substring(1, entryName.length() - 1);
+    }
+
+    @Override
+    public void visit(ContinueStmt continueStmt, CFGContext ctx) {
+        var followingNode = ctx.getFollowingNode();
+        
+        var optLabel = continueStmt.getLabel();
+        if ( optLabel.isPresent() && ctx.getLabels().containsKey(optLabel.get().toString()) ) {
+            followingNode = ctx.getLabels().get(optLabel.get().toString());
+        } else if ( ctx.getCondNode().isPresent() ) {
+            followingNode = ctx.getCondNode().get();
+        }
+
+        if ( followingNode == null ) {
+            System.out.println("NUUUUL");
+        }
+        ctx.setCurrentNode(followingNode);
     }
 }

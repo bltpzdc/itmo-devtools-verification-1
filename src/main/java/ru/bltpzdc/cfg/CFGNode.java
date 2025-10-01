@@ -6,7 +6,6 @@ import java.util.List;
 import com.github.javaparser.utils.Pair;
 
 public class CFGNode {
-    private boolean  was = false;
     private final String id;
     private final String label;
     private final CFGNodeType type;
@@ -25,16 +24,6 @@ public class CFGNode {
 
     public void addSuccessor(CFGNode node, String condition) {
         successors.add(new Pair<>(condition, node));
-    }
-
-    @Override
-    public String toString() {
-        if ( !was ) {
-            was = true;
-            return "CFGNode(id: " + id + ", label: " + label + ", successors: " + successors.toString() + ")";
-        } else {
-            return "CFGNode(" + id +")";
-        }
     }
 
     public CFGNodeType getType() {

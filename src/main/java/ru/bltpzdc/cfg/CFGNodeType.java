@@ -1,5 +1,5 @@
 package ru.bltpzdc.cfg;
 
 public enum CFGNodeType {
-    ENTRY, EXIT, STMT, COND, LABEL,
+    ENTRY, EXIT, EXPR, COND, LABEL,
 }

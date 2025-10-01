@@ -33,14 +33,15 @@ public class Main {
 
         CFGBuilder cfgBuilder = new CFGBuilder();
         for ( var method : unit.findAll(MethodDeclaration.class) ) {
-            var result = cfgBuilder.buildCFG(method);
-            var dot = DOTGenerator.convert(method.getName().toString(), result.a).get();
+            var result = cfgBuilder.build(method);
+            var dot = DOTGenerator.convert(result.a);
+
             if ( !outputDir.isEmpty() ) {
                 String outputFile = outputDir + String.format(".%s.dot", method.getName());
                 try {
                     Files.write(Paths.get(outputFile), dot.getBytes());
                 } catch (IOException e) {
-                    System.err.println(String.format("Unable to write in %s", outputFile));
+                    System.err.println("Unable to write in " + outputFile);
                 }
             } else {
                 System.out.println(method.getName() + ":");

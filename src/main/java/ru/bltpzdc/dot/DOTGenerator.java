@@ -1,52 +1,55 @@
 package ru.bltpzdc.dot;
 
 import java.util.Map;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 import ru.bltpzdc.cfg.CFGNode;
 import ru.bltpzdc.cfg.CFGNodeType;
 
 public class DOTGenerator {
-    public static Optional<String> convert(String methodName, Map<String, CFGNode> nodes) {
-        Optional<String> result;
-        try {
-            var dot = new StringBuilder();
-            dot.append("""
+    public static String convert(Map<String, CFGNode> nodes) {
+        var dotNodes = nodes.values().stream()
+            .filter(node -> node.getType() != CFGNodeType.LABEL)
+            .map(node -> toDot(node))
+            .distinct()
+            .collect(Collectors.joining("\n"));
+
+        var dotEdges = nodes.values().stream()
+            .filter(node -> node.getType() != CFGNodeType.LABEL)
+            .flatMap(node -> node.getSuccessors().stream()
+                .map(suc -> toDot(node, suc.b, suc.a))
+            )
+            .distinct()
+            .collect(Collectors.joining("\n"));
+
+        return new StringBuilder()
+            .append(PREFIX)
+            .append(dotNodes)
+            .append("\n\n")
+            .append(dotEdges)
+            .append(SUFFIX)
+            .toString();
+    }
+
+    private final static String PREFIX = """
                     digraph CFG {
                         rankdir=TB;
                         node [shape=rectangle, fontname="Arial"];
 
+                    """;
+    private final static String SUFFIX = "\n}";
 
-                    """);
+    private static final Map<CFGNodeType, String> nodeShapes = Map.of(
+        CFGNodeType.ENTRY, "ellipse",
+        CFGNodeType.EXIT, "ellipse",
+        CFGNodeType.COND, "diamond",
+        CFGNodeType.EXPR, "rectangle"
+    );
 
-            for ( var node : nodes.values() ) {
-                var type = node.getType();
-                if ( type != CFGNodeType.LABEL ) {
-                    var shape = nodeShapes.get(node.getType());
-                    dot.append(String.format("    \"%s\" [label=\"%s\", shape=%s];\n",
-                        node.getId(), node.getLabel(), shape));
-                }
-            }
-
-            dot.append("\n");
-
-            for ( var node : nodes.values() ) {
-                if ( node.getType() != CFGNodeType.LABEL ) {
-                    for ( var successor : node.getSuccessors() ) {
-                        dot.append(String.format("    \"%s\" -> \"%s\" [label=\"%s\", color=%s]\n",
-                            node.getId(), processCFGNodeId(successor.b), successor.a, getEdgeColor(successor.a)));
-                    }
-                }
-            }
-
-            dot.append("}");
-            result = Optional.of(dot.toString());
-        } catch (Exception e) {
-            result = Optional.empty();
-        }
-
-        return result;
-    }
+    private static final Map<String, String> edgeColors = Map.of(
+        "True", "green",
+        "False", "red"
+    );
 
     // if CFGNodeType is LABEL, we need to ignore this node
     private static String processCFGNodeId(CFGNode node) {
@@ -55,21 +58,24 @@ public class DOTGenerator {
              : node.getId();
     }
 
-    private static final Map<CFGNodeType, String> nodeShapes = Map.of(
-        CFGNodeType.ENTRY, "ellipse",
-        CFGNodeType.EXIT, "ellipse",
-        CFGNodeType.COND, "diamond",
-        CFGNodeType.STMT, "rectangle"
-    );
-
-    private static final Map<String, String> edgeColors = Map.of(
-        "True", "green",
-        "False", "red"
-    );
-
     private static String getEdgeColor(String label) {
         return edgeColors.containsKey(label)
              ? edgeColors.get(label)
              : "black";
+    }
+
+    private static String toDot(CFGNode node) {
+        return String.format("\t\"%s\" [label=\"%s\", shape=%s];",
+                             node.getId(),
+                             node.getLabel(),
+                             nodeShapes.get(node.getType()));
+    }
+
+    private static String toDot(CFGNode node1, CFGNode node2, String label) {
+        return String.format("\t\"%s\" -> \"%s\" [label=\"%s\", color=%s]",
+                             processCFGNodeId(node1),
+                             processCFGNodeId(node2),
+                             label,
+                             getEdgeColor(label));
     }
 }
