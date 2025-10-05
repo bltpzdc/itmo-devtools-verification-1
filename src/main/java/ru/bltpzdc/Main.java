@@ -13,12 +13,12 @@ import ru.bltpzdc.dot.DOTGenerator;
 
 public class Main {
     public static void main(String[] args) {
-        if ( args.length < 1 ) {
-            System.err.println("usage: java -jar <jar> <filename> [<output-dir>]");
-            return;
-        }
+        // if ( args.length < 1 ) {
+        //     System.err.println("usage: java -jar <jar> <filename> [<output-dir>]");
+        //     return;
+        // }
 
-        String filename = args[0];
+        String filename = "/home/sevastian/ITMO/ipkn/grade1/verification/lab1/cfg/src/main/resources/Test.java";
         String outputDir = args.length > 1
                        ? args[1] + Paths.get(filename).getFileName().toString().replace(".java", "")
                        : "";

@@ -20,6 +20,15 @@ public class CFGContext {
         this.condNode = condNode;
     }
 
+    public CFGContext(CFGContext other) {
+        this.currentNode = other.followingNode;
+        this.followingNode = other.followingNode;
+        this.labels = other.labels;
+        this.afterBreakNode = other.afterBreakNode;
+        this.exitNode = other.exitNode;
+        this.condNode = other.condNode;
+    }
+
     public Map<String, CFGNode> getLabels() {
         return labels;
     }

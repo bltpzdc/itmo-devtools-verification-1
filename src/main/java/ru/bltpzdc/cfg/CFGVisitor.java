@@ -4,11 +4,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AssignExpr;
+import com.github.javaparser.ast.expr.SimpleName;
+import com.github.javaparser.ast.expr.UnaryExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.BreakStmt;
 import com.github.javaparser.ast.stmt.ContinueStmt;
 import com.github.javaparser.ast.stmt.DoStmt;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ForStmt;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.LabeledStmt;
@@ -43,13 +47,25 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
     }
 
     @Override
-    public void visit(LabeledStmt labeledStmt, CFGContext ctx) {
-        var followingNode = ctx.getFollowingNode();
+    public void visit(AssignExpr assignExpr, CFGContext ctx) {
+        var node = createNode(assignExpr.toString(), CFGNodeType.EXPR);
+        node.addSuccessor(ctx.getFollowingNode());
+        ctx.setCurrentNode(node);
+    }
 
+    @Override
+    public void visit(UnaryExpr unaryExpr, CFGContext ctx) {
+        var node = createNode(unaryExpr.toString(), CFGNodeType.EXPR);
+        node.addSuccessor(ctx.getFollowingNode());
+        ctx.setCurrentNode(node);
+    }
+
+    @Override
+    public void visit(LabeledStmt labeledStmt, CFGContext ctx) {
         var label = labeledStmt.getLabel().toString();
         var labelNode = createNode(label, CFGNodeType.LABEL);
 
-        var labeledCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
+        var labeledCtx = new CFGContext(ctx);
         labeledCtx.getLabels().put(label, labelNode);
 
         labeledStmt.getStatement().accept(this, labeledCtx);
@@ -58,18 +74,26 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         ctx.setCurrentNode(labelNode);
     }
 
-    @Override
-    public void visit(BreakStmt breakStmt, CFGContext ctx) {
-        var optLabel = breakStmt.getLabel();
+    private CFGNode gotoHelper(CFGContext ctx, Optional<SimpleName> label, Optional<CFGNode> alternative) {
+        var result = ctx.getFollowingNode();
 
-        var followingNode = ctx.getFollowingNode();
-        if ( optLabel.isPresent() && ctx.getLabels().containsKey(optLabel.get().toString()) ) {
-            followingNode = ctx.getLabels().get(optLabel.get().toString());
-        } else if ( ctx.getAfterBreakNode().isPresent() ) {
-            followingNode = ctx.getAfterBreakNode().get();
+        if ( label.isPresent() && ctx.getLabels().containsKey(label.get().toString()) ) {
+            result = ctx.getLabels().get(label.get().toString());
+        } else if ( alternative.isPresent() ) {
+            result = alternative.get();
         }
 
-        ctx.setCurrentNode(followingNode);
+        return result;
+    }
+
+    @Override
+    public void visit(ContinueStmt continueStmt, CFGContext ctx) {
+        ctx.setCurrentNode(gotoHelper(ctx, continueStmt.getLabel(), ctx.getCondNode()));
+    }
+
+    @Override
+    public void visit(BreakStmt breakStmt, CFGContext ctx) {
+        ctx.setCurrentNode(gotoHelper(ctx, breakStmt.getLabel(), ctx.getAfterBreakNode()));
     }
 
     @Override
@@ -87,24 +111,16 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
     }
 
     @Override
-    public void visit(ExpressionStmt exprStmt, CFGContext ctx) {
-        var expr = exprStmt.toString();
-        var stmtNode = createNode(expr, CFGNodeType.EXPR);
-        stmtNode.addSuccessor(ctx.getFollowingNode());
-        ctx.setCurrentNode(stmtNode);
-    }
-
-    @Override
     public void visit(IfStmt ifStmt, CFGContext ctx) {
         var followingNode = ctx.getFollowingNode();
         var condNode = createNode(ifStmt.getCondition().toString(), CFGNodeType.COND);
 
-        var thenCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
+        var thenCtx = new CFGContext(ctx);
         ifStmt.getThenStmt().accept(this, thenCtx);
 
         var elseNode = followingNode;
         if ( ifStmt.hasElseBranch() ) {
-            var elseCtx = new CFGContext(followingNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
+            var elseCtx = new CFGContext(ctx);
             ifStmt.getElseStmt().get().accept(this, elseCtx);
             elseNode = elseCtx.getCurrentNode();
         }
@@ -151,20 +167,30 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
         var condNode = createNode(cond, CFGNodeType.COND);
         
         var initNode = condNode;
-        var init = forStmt.getInitialization().toString();
-        if ( !init.equals("[]") ) {
-            initNode = createNode(init, CFGNodeType.EXPR);
-            initNode.addSuccessor(condNode);
+        var init = forStmt.getInitialization();
+        if ( !init.isEmpty() ) {
+            var currentNode = condNode;
+            for ( int i = init.size() - 1; i >= 0; --i ) {
+                var curCtx = new CFGContext(currentNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), Optional.empty());
+                init.get(i).accept(this, curCtx);
+                currentNode = curCtx.getCurrentNode();
+            }
+            initNode = currentNode;
         }
 
-        var update = forStmt.getUpdate().toString();
         var updateNode = condNode;
-        if ( !update.equals("[]") ) {
-            updateNode = createNode(update, CFGNodeType.EXPR);
-            updateNode.addSuccessor(condNode);
+        var update = forStmt.getUpdate();
+        if ( !update.isEmpty() ) {
+            var currentNode = condNode;
+            for ( int i = update.size() - 1; i >= 0; --i ) {
+                var curCtx = new CFGContext(currentNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), Optional.empty());
+                update.get(i).accept(this, curCtx);
+                currentNode = curCtx.getCurrentNode();
+            }
+            updateNode = currentNode;
         }
 
-        var bodyCtx = new CFGContext(updateNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), Optional.of(condNode));
+        var bodyCtx = new CFGContext(updateNode, ctx.getLabels(), Optional.of(followingNode), ctx.getExitNode(), Optional.of(updateNode));
         forStmt.getBody().accept(this, bodyCtx);
 
         condNode.addSuccessor(bodyCtx.getCurrentNode(), "True");
@@ -220,19 +246,22 @@ public class CFGVisitor extends VoidVisitorAdapter<CFGContext> {
     }
 
     @Override
-    public void visit(ContinueStmt continueStmt, CFGContext ctx) {
-        var followingNode = ctx.getFollowingNode();
-        
-        var optLabel = continueStmt.getLabel();
-        if ( optLabel.isPresent() && ctx.getLabels().containsKey(optLabel.get().toString()) ) {
-            followingNode = ctx.getLabels().get(optLabel.get().toString());
-        } else if ( ctx.getCondNode().isPresent() ) {
-            followingNode = ctx.getCondNode().get();
+    public void visit(VariableDeclarationExpr declExpr, CFGContext ctx) {
+        var currentNode = ctx.getFollowingNode();
+        var stmts = declExpr.getChildNodes();
+        for ( int i = stmts.size() - 1; i >= 0; --i ) {
+            var stmtCtx = new CFGContext(currentNode, ctx.getLabels(), ctx.getAfterBreakNode(), ctx.getExitNode(), ctx.getCondNode());
+            stmts.get(i).accept(this, stmtCtx);
+            currentNode = stmtCtx.getCurrentNode();
         }
 
-        if ( followingNode == null ) {
-            System.out.println("NUUUUL");
-        }
-        ctx.setCurrentNode(followingNode);
+        ctx.setCurrentNode(currentNode);
+    }
+
+    @Override
+    public void visit(VariableDeclarator varDecl, CFGContext ctx) {
+        var currentNode = createNode(varDecl.toString(), CFGNodeType.EXPR);
+        currentNode.addSuccessor(ctx.getFollowingNode());
+        ctx.setCurrentNode(currentNode);
     }
 }
